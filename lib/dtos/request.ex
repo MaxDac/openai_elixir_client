@@ -1,4 +1,4 @@
-defmodule Request do
+defmodule OpenAi.Dtos.Request do
   @moduledoc """
   The request for OpenAI API for text completion.
   """

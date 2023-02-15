@@ -1,4 +1,4 @@
-defmodule Response do
+defmodule OpenAi.Dtos.Response do
   @derive Jason.Encoder
   defstruct id: "",
             object: "",
