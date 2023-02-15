@@ -9,6 +9,9 @@ defmodule OpenAi.Dtos.Response do
             error: "",
             usage: %{}
 
+  @typedoc """
+  The OpenAI API typical response for the completion API.
+  """
   @type t :: %__MODULE__{
           id: binary(),
           object: binary(),

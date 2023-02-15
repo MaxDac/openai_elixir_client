@@ -10,6 +10,9 @@ defmodule OpenAi.Dtos.State do
             last_request: nil,
             last_response: nil
 
+  @typedoc """
+  The session accumulated within the context of an ongoing conversation.
+  """
   @type t :: %__MODULE__{
     session_id: binary(),
     last_request: Request.t(),

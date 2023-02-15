@@ -5,6 +5,9 @@ defmodule OpenAi.Dtos.Configuration do
 
   defstruct key: ""
 
+  @typedoc """
+  The key represents the OpenAI token that will be used to authenticate to the API.
+  """
   @type t :: %__MODULE__{
     key: binary()
   }

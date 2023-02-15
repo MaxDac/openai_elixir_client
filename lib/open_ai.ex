@@ -10,6 +10,121 @@ defmodule OpenAi do
   @completion_type "text-davinci-003"
   @base_url "https://api.openai.com"
 
+  @doc """
+  Calls the OpenAI completion API.
+  @param prompt The prompt that will be sent to the API for the completion.
+  @param session The conversation session. It retains the state of the conversation until now, it must be passed along with the prompt for continuous conversations.
+  @param configuration The configuration to use for the request. If nil, the default configuration will be used.
+
+  ## Examples
+
+      iex> {:ok, session} = OpenAi.call_completion_api("Write an Haiku")         
+      {:ok,
+       [
+         %OpenAi.Dtos.State{
+           session_id: "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+           last_request: %OpenAi.Dtos.Request{
+             model: "text-davinci-003",
+             prompt: "\nWrite an Haiku",
+             max_tokens: 20,
+             temperature: 0,
+             top_p: 1,
+             frequency_penalty: 0,
+             presence_penalty: 0,
+             stop: ["\\n"]
+           },
+           last_response: %{
+             "choices" => [
+               %{
+                 "finish_reason" => "stop",
+                 "index" => 0,
+                 "logprobs" => nil,
+                 "text" => "\n\nAutumn leaves fall down\nSoftly they whisper goodbye\nUntil we meet again"
+               }
+             ],
+             "created" => 1676498737,
+             "id" => "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+             "model" => "text-davinci-003",
+             "object" => "text_completion",
+             "usage" => %{
+               "completion_tokens" => 18,
+               "prompt_tokens" => 5,
+               "total_tokens" => 23
+             }
+           }
+         }
+       ]}
+
+      iex> {:ok, session} = OpenAi.call_completion_api("Change the first line of the Haiku you wrote", session)
+      {:ok,
+       [
+         %OpenAi.Dtos.State{
+           session_id: "cmpl-6kKCgCEfsHOBU2yq3eGrv1XvzBF2n",
+           last_request: %OpenAi.Dtos.Request{
+             model: "text-davinci-003",
+             prompt: "\nWrite an Haiku\n\n\nAutumn leaves fall down\nSoftly they whisper goodbye\nUntil we meet again\nChange the first line of the Haiku you wrote",
+             max_tokens: 20,
+             temperature: 0,
+             top_p: 1,
+             frequency_penalty: 0,
+             presence_penalty: 0,
+             stop: ["\\n"]
+           },
+           last_response: %{
+             "choices" => [
+               %{
+                 "finish_reason" => "stop",
+                 "index" => 0,
+                 "logprobs" => nil,
+                 "text" => "\n\nSummer fades away\nSoftly it whispers goodbye\nUntil we meet again"
+               }
+             ],
+             "created" => 1676498770,
+             "id" => "cmpl-6kKCgCEfsHOBU2yq3eGrv1XvzBF2n",
+             "model" => "text-davinci-003",
+             "object" => "text_completion",
+             "usage" => %{
+               "completion_tokens" => 16,
+               "prompt_tokens" => 34,
+               "total_tokens" => 50
+             }
+           }
+         },
+         %OpenAi.Dtos.State{
+           session_id: "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+           last_request: %OpenAi.Dtos.Request{
+             model: "text-davinci-003",
+             prompt: "\nWrite an Haiku",
+             max_tokens: 20,
+             temperature: 0,
+             top_p: 1,
+             frequency_penalty: 0,
+             presence_penalty: 0,
+             stop: ["\\n"]
+           },
+           last_response: %{
+             "choices" => [
+               %{
+                 "finish_reason" => "stop",
+                 "index" => 0,
+                 "logprobs" => nil,
+                 "text" => "\n\nAutumn leaves fall down\nSoftly they whisper goodbye\nUntil we meet again"
+               }
+             ],
+             "created" => 1676498737,
+             "id" => "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+             "model" => "text-davinci-003",
+             "object" => "text_completion",
+             "usage" => %{
+               "completion_tokens" => 18,
+               "prompt_tokens" => 5,
+               "total_tokens" => 23
+             }
+           }
+         }
+       ]}
+
+  """
   @spec call_completion_api(
     prompt :: binary(),
     session :: list(State.t()),
@@ -23,7 +138,7 @@ defmodule OpenAi do
     {url, request} = create_completion_request(session, prompt)
 
     response =
-      Finch.build(:post, url, headers, Jason.encode!(request) |> IO.inspect(label: "Request"))
+      Finch.build(:post, url, headers, Jason.encode!(request) |> IO.inspect(label: "request"))
       |> Finch.request(MyFinch)
 
     case response do
@@ -54,7 +169,7 @@ defmodule OpenAi do
     request = %Request{
       model: @completion_type,
       prompt: new_prompt,
-      max_tokens: 200,
+      max_tokens: 2000,
       temperature: 0,
       top_p: 1,
       frequency_penalty: 0,
@@ -70,9 +185,19 @@ defmodule OpenAi do
   defp join_session_inputs(prompt, session) do
     old_prompt = 
       session
-      |> Enum.map(fn %{last_request: %{prompt: prompt}} -> prompt end)
+      # To obtain the new prompt, we need to send all the conversation in the prompt field of the request.
+      # This of course is very costly, because the token takes into consideration the whole prompt when computing.
+      |> Enum.map(fn 
+        %{
+          last_request: %{prompt: prompt}, 
+          last_response: %{
+            "choices" => [%{"text" => text} | _]
+          }
+        } -> "#{prompt}\n#{text}" 
+      end)
+      |> Enum.reverse()
       |> Enum.join("\n")
 
-    prompt <> "\n" <> old_prompt
+    old_prompt <> "\n" <> prompt
   end
 end
