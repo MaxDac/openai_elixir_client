@@ -3,13 +3,15 @@ defmodule OpenAi.Dtos.Configuration do
   Configuration data structure.
   """
 
-  defstruct key: ""
+  defstruct key: "",
+            base_url: "https://api.openai.com"
 
   @typedoc """
   The key represents the OpenAI token that will be used to authenticate to the API.
   """
   @type t :: %__MODULE__{
-    key: binary()
+    key: binary(),
+    base_url: binary()
   }
 
   def new_from_env do

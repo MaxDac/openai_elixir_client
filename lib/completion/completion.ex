@@ -1,14 +1,14 @@
-defmodule OpenAi do
+defmodule OpenAi.Completion do
   @moduledoc """
   Some test calling OpenAI API.
   """
 
   alias OpenAi.ApiHelpers
-  alias OpenAi.Dtos.Request
-  alias OpenAi.Dtos.State
+  alias OpenAi.Completion.Dtos.Request
+  alias OpenAi.Completion.Dtos.Response
+  alias OpenAi.Completion.Dtos.State
 
   @completion_type "text-davinci-003"
-  @base_url "https://api.openai.com"
 
   @doc """
   Calls the OpenAI completion API.
@@ -18,7 +18,7 @@ defmodule OpenAi do
 
   ## Examples
 
-      iex> {:ok, session} = OpenAi.call_completion_api("Write an Haiku")         
+      iex> {:ok, _session} = OpenAi.call_completion_api("Write an Haiku")
       {:ok,
        [
          %OpenAi.Dtos.State{
@@ -55,7 +55,40 @@ defmodule OpenAi do
          }
        ]}
 
-      iex> {:ok, session} = OpenAi.call_completion_api("Change the first line of the Haiku you wrote", session)
+      iex> {:ok, _session} = OpenAi.call_completion_api("Change the first line of the Haiku you wrote", [
+      ...> %OpenAi.Dtos.State{
+      ...>   session_id: "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+      ...>   last_request: %OpenAi.Dtos.Request{
+      ...>     model: "text-davinci-003",
+      ...>     prompt: "\nWrite an Haiku",
+      ...>     max_tokens: 20,
+      ...>     temperature: 0,
+      ...>     top_p: 1,
+      ...>     frequency_penalty: 0,
+      ...>     presence_penalty: 0,
+      ...>     stop: ["\\n"]
+      ...>   },
+      ...>   last_response: %{
+      ...>     "choices" => [
+      ...>       %{
+      ...>         "finish_reason" => "stop",
+      ...>         "index" => 0,
+      ...>         "logprobs" => nil,
+      ...>         "text" => "\n\nAutumn leaves fall down\nSoftly they whisper goodbye\nUntil we meet again"
+      ...>       }
+      ...>     ],
+      ...>     "created" => 1676498737,
+      ...>     "id" => "cmpl-6kKC9taCBxS05rKgkRtKdkAXekYQq",
+      ...>     "model" => "text-davinci-003",
+      ...>     "object" => "text_completion",
+      ...>     "usage" => %{
+      ...>       "completion_tokens" => 18,
+      ...>       "prompt_tokens" => 5,
+      ...>       "total_tokens" => 23
+      ...>     }
+      ...>   }
+      ...> }
+      ...>])
       {:ok,
        [
          %OpenAi.Dtos.State{
@@ -128,22 +161,22 @@ defmodule OpenAi do
   @spec call_completion_api(
     prompt :: binary(),
     session :: list(State.t()),
-    configuration :: OpenAi.Dtos.Configuration.t() | nil
-  ) :: {:ok, list(Session.t())} | {:error, binary()}
+    configuration :: nil | Configuration.t()
+  ) :: {:ok, list(State.t())} | {:error, binary()}
   def call_completion_api(prompt, session \\ [], configuration \\ nil) do
     Finch.start_link(name: MyFinch)
 
     headers = ApiHelpers.get_request_headers(configuration)
 
-    {url, request} = create_completion_request(session, prompt)
+    {url, request} = create_completion_request(session, prompt, configuration)
 
     response =
-      Finch.build(:post, url, headers, Jason.encode!(request) |> IO.inspect(label: "request"))
+      Finch.build(:post, url, headers, Jason.encode!(request))
       |> Finch.request(MyFinch)
 
     case response do
       {:ok, %{status: 200, body: body}} ->
-        parsed_response = Jason.decode!(body)
+        parsed_response = struct!(Response, Jason.decode!(body) |> IO.inspect(label: "parsed response") |> IO.inspect(label: "decoded response"))
         {:ok, [%State{
           session_id: parsed_response["id"],
           last_request: request,
@@ -162,7 +195,10 @@ defmodule OpenAi do
     end
   end
 
-  defp create_completion_request(session, prompt) do
+  def extract_conversation([]), do: ""
+  def extract_conversation([%{"choices" => %{"text" => text}}]), do: text
+
+  defp create_completion_request(session, prompt, configuration) do
     new_prompt = join_session_inputs(prompt, session)
 
     # Create a request
@@ -177,23 +213,27 @@ defmodule OpenAi do
       stop: ["\\n"]
     }
 
-    url = "#{@base_url}/v1/completions"
+    url = "#{ApiHelpers.get_base_url(configuration)}/v1/completions"
 
     {url, request}
   end
 
+  @spec join_session_inputs(
+    prompt :: binary(),
+    session :: list(State.t())
+  ) :: binary()
   defp join_session_inputs(prompt, session) do
-    old_prompt = 
+    old_prompt =
       session
       # To obtain the new prompt, we need to send all the conversation in the prompt field of the request.
       # This of course is very costly, because the token takes into consideration the whole prompt when computing.
-      |> Enum.map(fn 
+      |> Enum.map(fn
         %{
-          last_request: %{prompt: prompt}, 
+          last_request: %{prompt: prompt},
           last_response: %{
             "choices" => [%{"text" => text} | _]
           }
-        } -> "#{prompt}\n#{text}" 
+        } -> "#{prompt}\n#{text}"
       end)
       |> Enum.reverse()
       |> Enum.join("\n")

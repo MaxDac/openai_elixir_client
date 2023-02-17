@@ -1,11 +1,12 @@
-defmodule OpenAi.Dtos.State do
+defmodule OpenAi.Completion.Dtos.State do
   @moduledoc """
   Represents the state of a particular chat session.
   """
 
-  alias OpenAi.Dtos.Response
-  alias OpenAi.Dtos.Request
+  alias OpenAi.Completion.Dtos.Response
+  alias OpenAi.Completion.Dtos.Request
 
+  @derive Jason.Encoder
   defstruct session_id: "",
             last_request: nil,
             last_response: nil
